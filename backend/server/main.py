@@ -4,6 +4,7 @@ import uvicorn
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
+from google import genai
 
 # ---------------------------------------------------------
 # Path Handling
@@ -71,6 +72,16 @@ def get_test_data(db: Session = Depends(get_db)):
         "course_count": db.query(Course).count(),
         "message": "Connection verified successfully"
     }
+
+
+
+@app.post("/chat")
+async def chat_with_db(question: str):
+    # This is your 'small DB' data for the POC
+    mock_db_data = [{"id": 1, "item": "Laptop", "price": 1200}, {"id": 2, "item": "Mouse", "price": 25}]
+    
+    answer = get_ai_response(question, mock_db_data)
+    return {"gemini_says": answer}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
