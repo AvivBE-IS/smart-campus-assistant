@@ -1,39 +1,41 @@
+import os
 import sys
 import pathlib
 import uvicorn
-from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, Session
+import json
+from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from google import genai
+from dotenv import load_dotenv
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
 
 # ---------------------------------------------------------
-# Path Handling
+# Path Handling & DB Imports
 # ---------------------------------------------------------
-# Ensure we can import from backend/database
 current_dir = pathlib.Path(__file__).parent.resolve()
 backend_dir = current_dir.parent
 sys.path.append(str(backend_dir))
 
 try:
-    from DB.models import Base, Student, Course, DATABASE_URL
+    from DB.models import Course, DATABASE_URL 
 except ImportError as e:
-    print(f"Error importing models: {e}")
-    sys.exit(1)
+    print(f"❌ Error importing DB models: {e}")
 
-# ---------------------------------------------------------
-# Software Lifecycle Integration
-# ---------------------------------------------------------
-# Infrastructure & Deployment: This server acts as the bridge between the persistent data layer (SQLite DB)
-# and the client-facing application. By managing database connections efficiently via session pooling, 
-# it ensures data integrity and stability.
-#
-# System Development: It exposes a RESTful API that decouples the frontend from backend logic, 
-# allowing parallel development. The 'get_db' dependency ensures clean resource management.
-#
-# System Analysis: The lightweight FastAPI framework and optimized SQLAlchemy queries ensure low latency,
-# meeting the non-functional requirement of a response time under 8 seconds for student queries.
+# Load environment variables
+load_dotenv()
 
-app = FastAPI(title="Smart Campus Assistant")
+app = FastAPI(title="Smart Campus Assistant - Task 11 Integrated")
+
+# Allow CORS for the frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ---------------------------------------------------------
 # Database Setup
@@ -49,39 +51,86 @@ def get_db():
         db.close()
 
 # ---------------------------------------------------------
-# Endpoints
+# Data Models
+# ---------------------------------------------------------
+class ChatRequest(BaseModel):
+    message: str
+
+# ---------------------------------------------------------
+# API Endpoints
 # ---------------------------------------------------------
 
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to the Smart Campus Assistant API"}
-
-@app.get("/health")
-def health_check(db: Session = Depends(get_db)):
+# FIXED: Changed from /chat to /ask to match Task 9 and Frontend calls
+@app.post("/ask")
+async def ask_question(request: ChatRequest, db: Session = Depends(get_db)):
     try:
-        # Execute a simple query to check connection
-        db.execute(text("SELECT 1"))
-        return {"status": "healthy", "database": "connected"}
+        # Print user input to console (as requested)
+        print(f"User input received: {request.message}")
+
+        # 1. Fetch relevant data from the DB
+        courses = db.query(Course).all()
+        db_context = "Current campus database data:\n"
+        for course in courses:
+            db_context += f"- Course: {course.name}, Credits: {course.credits}\n"
+        
+        # 2. Advanced Prompt Engineering (Classification + Context)
+        final_prompt = f"""
+        You are a Smart Campus Assistant. 
+        Analyze the user's question and fulfill these two requirements:
+        
+        Requirement 1: Categorize the question into exactly one: 
+        "לוח זמנים", "מידע כללי", or "בעיה טכנית".
+        
+        Requirement 2: Answer in Hebrew based ONLY on the context below. 
+        If info is missing, say you don't know.
+
+        IMPORTANT: Return the output ONLY as a valid JSON object (no markdown) with keys:
+        {{
+            "category": "category_name",
+            "answer": "your_hebrew_answer"
+        }}
+        
+        Database Context:
+        {db_context}
+        
+        User Question: {request.message}
+        """
+
+        # 3. Primary API call (Gemini 3 Flash)
+        api_key = os.getenv("GEMINI_API_KEY")
+        client = genai.Client(api_key=api_key)
+        
+        try:
+            response = client.models.generate_content(
+                model="gemini-3-flash-preview", 
+                contents=final_prompt
+            )
+        except Exception as api_err:
+            # Task 13: Fallback mechanism if primary model fails
+            print(f"Fallback triggered: {api_err}")
+            response = client.models.generate_content(
+                model="gemini-2.5-flash", 
+                contents=final_prompt
+            )
+
+        # 4. Parse JSON result
+        clean_text = response.text.replace("```json", "").replace("```", "").strip()
+        parsed = json.loads(clean_text)
+        
+        print(f"Detected Category: {parsed['category']}")
+        
+        # 5. Return JSON to frontend
+        return {
+            "response": parsed["answer"],
+            "category": parsed["category"]
+        }
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")
-
-@app.get("/test-data")
-def get_test_data(db: Session = Depends(get_db)):
-    return {
-        "student_count": db.query(Student).count(),
-        "course_count": db.query(Course).count(),
-        "message": "Connection verified successfully"
-    }
-
-
-
-@app.post("/chat")
-async def chat_with_db(question: str):
-    # This is your 'small DB' data for the POC
-    mock_db_data = [{"id": 1, "item": "Laptop", "price": 1200}, {"id": 2, "item": "Mouse", "price": 25}]
-    
-    answer = get_ai_response(question, mock_db_data)
-    return {"gemini_says": answer}
+        print(f"Error occurred: {e}")
+        return {
+            "response": "מצטער, חלה שגיאה בעיבוד הבקשה. נסה שוב מאוחר יותר.",
+            "category": "בעיה טכנית"
+        }
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

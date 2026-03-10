@@ -12,7 +12,7 @@ def test_gemini_3():
         # Note the exact name: gemini-3-flash-preview
         response = client.models.generate_content(
             model="gemini-3-flash-preview", 
-            contents="Confirming Gemini 3 is active and responding!"
+            contents="שלום"
         )
         print(f"✅ Connection Successful!")
         print(f"🤖 Gemini 3 says: {response.text}")
