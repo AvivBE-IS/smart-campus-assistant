@@ -1,65 +1,79 @@
-# Smart Campus Assistant
+Smart Campus Assistant
 
-An AI-powered web application built to instantly classify and answer student queries regarding campus information. Developed as an evaluation project for Elad Systems.
+An AI-powered web application built to instantly classify and answer student queries regarding campus information. Developed as a capstone evaluation project for Elad Systems.
 
-## Architecture Overview
+Architecture Overview
 
-The system is built using a modern full-stack architecture:
-* **Frontend:** A lightweight web interface where students can submit natural language questions.
-* **Backend:** A RESTful API built with **Python & FastAPI** that handles incoming requests, manages routing, and implements error handling/fallback mechanisms.
-* **AI Integration:** The backend communicates with the Gemini API to classify the user's intent into predefined categories (Schedule, General Info, Technical Issue) and generate accurate responses based on structured campus data.
+The system is built using a modern full-stack and highly available architecture:
 
-## Prerequisites
+Frontend: A lightweight, responsive web interface where students can submit natural language questions.
 
-Before you begin, ensure you have the following installed:
-* Python 3.10+
-* Node.js & npm (if applicable for your frontend)
-* Git
+Backend: A RESTful API built with Python & FastAPI that handles incoming requests, manages routing, and retrieves context from a local SQLite database.
 
-## Environment Variables
+AI Integration: The backend communicates with the Google Gemini API to classify the user's intent into predefined categories (Schedule, General Info, Technical Issue) and generates JSON-formatted responses.
 
-This project requires certain environment variables to run safely without hardcoding secrets. 
+Resilience (Fallback): Implemented an automatic fallback mechanism routing queries from Gemini 3 Flash to Gemini 2.5 Flash during server overloads (HTTP 503/429) to ensure an 8-second SLA.
 
-Create a `.env` file in the root directory (this file is ignored by git) and add the following keys:
+Infrastructure & DevOps (CI/CD)
 
-AI_API_KEY=your_api_key_here
+Containerization: The entire application is dockerized using a multi-stage Dockerfile and orchestrated via docker-compose.yml for isolated and secure deployment.
+
+Continuous Integration: A GitHub Actions pipeline is configured to automatically run code linting (Flake8) and Unit Tests (Pytest) on every push to the main branch.
+
+Environment Variables
+
+This project requires certain environment variables to run safely without hardcoding secrets.
+Create a .env file in the root directory (this file is ignored by git) and add the following:
+
+GEMINI_API_KEY=your_actual_api_key_here
 PORT=8000
 
-## Installation & Running
 
-Follow these steps to get the development environment running locally:
+Installation & Running
 
-**1. Clone the repository**
-git clone https://github.com/yourusername/smart-campus-assistant.git
+The easiest and recommended way to run the system is via Docker.
+
+Method 1: Running with Docker (Recommended)
+
+Ensure Docker Desktop is installed and running.
+
+Clone the repository:
+
+git clone [https://github.com/yourusername/smart-campus-assistant.git](https://github.com/yourusername/smart-campus-assistant.git)
 cd smart-campus-assistant
 
-**2. Backend Setup**
+
+Build and run the containers:
+
+docker compose up --build
+
+
+Access the application at http://localhost:8000 (or the specific port defined for the frontend) and the API docs at http://localhost:8000/docs.
+
+Method 2: Local Development (Manual Setup)
+
+If you prefer running without Docker:
+
+Backend Setup:
+
 cd backend
 python -m venv venv
 source venv/bin/activate  # On Windows use: venv\Scripts\activate
 pip install -r requirements.txt
-
-**3. Frontend Setup**
-cd ../frontend
-npm install
-
-**4. Start the Application**
-Open two terminal windows:
-
-*Terminal 1 (Backend):*
-cd backend
 uvicorn main:app --reload
 
-*Terminal 2 (Frontend):*
-cd frontend
-npm start
 
-## Testing
+Frontend Setup:
+Open the index.html file in your browser, or serve it using a simple local server. (Note: Adjust this section if you ended up using a framework like React).
 
-The AI service includes automated unit tests to verify categorization and fallback logic. 
+Testing
 
-To run the tests:
+The AI service includes automated unit tests to verify API categorization and the fallback logic mechanism using mocks.
+
+To run the tests locally:
+
 cd backend
 pytest -v
 
-*(Note: A screenshot of the passing test execution is included in the `/docs` folder as required.)*
+
+(Note: A screenshot of the passing test execution and the GitHub Actions green pipeline is included in the /docs folder as required.)
