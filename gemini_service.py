@@ -55,9 +55,23 @@ def get_gemini_response(user_query: str, db_context: list[dict]) -> str:
         """
 
         # 5. Generate and return the response
-        response = model.generate_content(prompt)
+        try:
+            response = model.generate_content(prompt)
+            raw_text = response.text
+        except Exception as e:
+            # Fallback to stable model if primary fails
+            print(f"Warning: Primary model 'gemini-3-flash-preview' failed with error: {e}. Falling back to 'gemini-2.5-flash'.")
+            fallback_model = genai.GenerativeModel(
+                model_name='gemini-2.5-flash',
+                system_instruction=system_instruction
+            )
+            response = fallback_model.generate_content(prompt)
+            raw_text = response.text
 
-        return response.text
+        # Clean the text by removing markdown backticks if present
+        cleaned_text = raw_text.strip('`').strip()
+
+        return cleaned_text
 
     except Exception as e:
         # In a production environment, you would log this error to a monitoring service.
