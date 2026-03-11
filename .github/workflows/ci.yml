@@ -1,6 +1,6 @@
 name: CI Pipeline
 
-# מתי הצינור הזה ירוץ? בכל פעם שדוחפים קוד לענף הראשי
+
 on:
   push:
     branches: [ "main", "master" ]
@@ -9,7 +9,7 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest # המכונה הווירטואלית שתריץ את הבדיקות
+    runs-on: ubuntu-latest 
 
     steps:
     - name: Checkout Code
@@ -23,18 +23,20 @@ jobs:
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
-        # התקנת כלי הבדיקה
+
         pip install flake8 pytest httpx
-        # התקנת הספריות של הפרויקט
+
         pip install -r backend/requirements.txt
 
     - name: Run Linter (Code Checks)
       run: |
-        # בודק שגיאות תחביר חמורות בקוד. 
-        # --exit-zero מבטיח שהבדיקה לא תכשיל את כל הצינור בגלל רווחים חסרים
+
+        # --exit-zero 
         flake8 backend/ --count --exit-zero --max-line-length=127 --statistics
 
     - name: Run Unit Tests
+      env:
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       run: |
         cd backend
         python -m pytest test_main.py -v
