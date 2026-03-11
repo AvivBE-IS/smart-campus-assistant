@@ -19,16 +19,17 @@ backend_dir = current_dir.parent
 sys.path.append(str(backend_dir))
 
 try:
-    from DB.models import Course, DATABASE_URL 
+    # Importing all models to give Gemini full campus context
+    from DB.models import Course, Lecturer, Group, Enrollment, Student, DATABASE_URL 
 except ImportError as e:
     print(f"❌ Error importing DB models: {e}")
 
-# Load environment variables
+# Load environment variables (Make sure your .env file has GEMINI_API_KEY)
 load_dotenv()
 
-app = FastAPI(title="Smart Campus Assistant - Task 11 Integrated")
+app = FastAPI(title="Smart Campus Assistant - Full DB Integration")
 
-# Allow CORS for the frontend
+# Allow CORS for the frontend (Crucial for Live Server on port 5500)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -60,43 +61,74 @@ class ChatRequest(BaseModel):
 # API Endpoints
 # ---------------------------------------------------------
 
-# FIXED: Changed from /chat to /ask to match Task 9 and Frontend calls
 @app.post("/ask")
 async def ask_question(request: ChatRequest, db: Session = Depends(get_db)):
+    """
+    Main endpoint that connects the Database context with Gemini's reasoning.
+    It categorizes the question and returns a formatted Hebrew response.
+    """
     try:
-        # Print user input to console (as requested)
         print(f"User input received: {request.message}")
 
-        # 1. Fetch relevant data from the DB
+        # 1. Fetching comprehensive data from all relevant tables
         courses = db.query(Course).all()
-        db_context = "Current campus database data:\n"
-        for course in courses:
-            db_context += f"- Course: {course.name}, Credits: {course.credits}\n"
+        lecturers = db.query(Lecturer).all()
+        groups = db.query(Group).all()
         
-        # 2. Advanced Prompt Engineering (Classification + Context)
+        # Formatting data into a structured context for the LLM
+        db_context = "### CAMPUS DATABASE CONTEXT ###\n"
+        
+        db_context += "COURSES:\n"
+        for c in courses:
+            db_context += f"- {c.name}: {c.credits} credits, Extra Fee: {c.extra_fee}\n"
+            
+        db_context += "\nLECTURERS:\n"
+        for l in lecturers:
+            db_context += f"- {l.rank} {l.first_name} {l.last_name}, Office: {l.office_location}\n"
+            
+        db_context += "\nSCHEDULE & EXAMS:\n"
+        for g in groups:
+            # Finding course name for the group
+            course_name = next((c.name for c in courses if c.id == g.course_id), "Unknown")
+            db_context += f"- {course_name} (Group {g.group_number}): {g.day_of_week}, Exam A: {g.exam_date_a}\n"
+
+
         final_prompt = f"""
-        You are a Smart Campus Assistant. 
-        Analyze the user's question and fulfill these two requirements:
-        
-        Requirement 1: Categorize the question into exactly one: 
-        "לוח זמנים", "מידע כללי", or "בעיה טכנית".
-        
-        Requirement 2: Answer in Hebrew based ONLY on the context below. 
-        If info is missing, say you don't know.
+ענה על שאלת המשתמש הבאה בהתבסס על המידע מהדאטה-בייס:
+{db_context}
 
-        IMPORTANT: Return the output ONLY as a valid JSON object (no markdown) with keys:
-        {{
-            "category": "category_name",
-            "answer": "your_hebrew_answer"
-        }}
-        
-        Database Context:
-        {db_context}
-        
-        User Question: {request.message}
-        """
+השאלה: {request.message}
+"""
+        # 2. Advanced Prompt Engineering (Classification + Formatting + RTL)
+        final_prompt = f"""
+ROLE: You are the official BGU Smart Campus Assistant. You are professional, helpful, and concise.
 
-        # 3. Primary API call (Gemini 3 Flash)
+STRICT RULES:
+1. Use ONLY the provided Database Context. If info is missing, say: "מצטער, המידע הזה לא קיים במערכת כרגע."
+2. Never mention that you are an AI or that you are looking at a database.
+3. If the answer contains more than 2 items, you MUST format it as a bulleted list using the character '•'.
+4. Each bullet point MUST start on a new line using double backslash n (\\n).
+
+CATEGORIZATION LOGIC:
+- "לוח זמנים": Exam dates, class days, schedules.
+- "מידע כללי": Course credits, department names.
+- "סגל ומרצים": Names, ranks, office locations.
+- "ציונים וממוצעים": Grades, individual student performance.
+- "רישום ועלויות": Extra fees, registration status.
+- "בעיה טכנית": Login issues, site bugs, or general help.
+
+EXAMPLES:
+User: "אילו קורסים יש?"
+Output: {{"category": "מידע כללי", "answer": "להלן הקורסים הזמינים:\\n• פייתון\\n• חדו''א א"}}
+
+DATABASE CONTEXT:
+{db_context}
+
+USER QUESTION: {request.message}
+
+FINAL INSTRUCTION: Return ONLY a valid JSON object. No markdown. No explanations.
+"""
+        # 3. Call Gemini (Primary: 3 Flash Preview)
         api_key = os.getenv("GEMINI_API_KEY")
         client = genai.Client(api_key=api_key)
         
@@ -106,29 +138,29 @@ async def ask_question(request: ChatRequest, db: Session = Depends(get_db)):
                 contents=final_prompt
             )
         except Exception as api_err:
-            # Task 13: Fallback mechanism if primary model fails
-            print(f"Fallback triggered: {api_err}")
+            # Task 13: Fallback mechanism
+            print(f"Primary model failed, triggering fallback: {api_err}")
             response = client.models.generate_content(
                 model="gemini-2.5-flash", 
                 contents=final_prompt
             )
 
-        # 4. Parse JSON result
+        # 4. Clean and Parse JSON
         clean_text = response.text.replace("```json", "").replace("```", "").strip()
         parsed = json.loads(clean_text)
         
         print(f"Detected Category: {parsed['category']}")
         
-        # 5. Return JSON to frontend
+        # 5. Response to Frontend
         return {
             "response": parsed["answer"],
             "category": parsed["category"]
         }
         
     except Exception as e:
-        print(f"Error occurred: {e}")
+        print(f"Critical Error: {e}")
         return {
-            "response": "מצטער, חלה שגיאה בעיבוד הבקשה. נסה שוב מאוחר יותר.",
+            "response": "מצטער, חלה שגיאה במערכת. צוות התמיכה עודכן.",
             "category": "בעיה טכנית"
         }
 
