@@ -1,0 +1,13 @@
+services:
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: campus_assistant_backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./.env   # שינינו מ-backend/.env ל-./.env כי הקובץ נמצא בשורש הפרויקט
+    volumes:
+      - ./backend:/app
+    restart: always
