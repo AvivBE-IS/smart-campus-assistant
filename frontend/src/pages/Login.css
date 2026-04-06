@@ -1,0 +1,153 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+/* Reset */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Full-screen dark background with subtle purple/cyan glows in the corners */
+.login-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: "Inter", sans-serif;
+  background-color: #0a0a0f;
+  background-image:
+    radial-gradient(
+      ellipse at 20% 50%,
+      rgba(99, 102, 241, 0.15) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse at 80% 20%,
+      rgba(6, 182, 212, 0.1) 0%,
+      transparent 50%
+    );
+}
+
+/* Glassmorphism card */
+.login-box {
+  width: 100%;
+  max-width: 400px;
+  padding: 2.5rem 2.25rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 0 0 1px rgba(6, 182, 212, 0.08),
+    0 24px 60px rgba(0, 0, 0, 0.6),
+    0 0 80px rgba(99, 102, 241, 0.07);
+}
+
+/* Heading */
+.login-box h1 {
+  text-align: center;
+  color: #f1f5f9;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin-bottom: 0.4rem;
+}
+
+.login-subtitle {
+  text-align: center;
+  color: #64748b;
+  font-size: 0.875rem;
+  margin-bottom: 2rem;
+}
+
+/* Each label + input pair */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1.2rem;
+}
+
+.form-group label {
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.45rem;
+}
+
+.form-group input {
+  padding: 0.75rem 1rem;
+  color: #f1f5f9;
+  font-size: 0.95rem;
+  font-family: "Inter", sans-serif;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  outline: none;
+  transition:
+    border-color 0.2s,
+    background 0.2s,
+    box-shadow 0.2s;
+}
+
+.form-group input::placeholder {
+  color: #475569;
+}
+
+/* Cyan glow on focus */
+.form-group input:focus {
+  border-color: #06b6d4;
+  background: rgba(6, 182, 212, 0.05);
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.12);
+}
+
+/* Gradient submit button */
+.login-btn {
+  width: 100%;
+  padding: 0.8rem;
+  margin-top: 0.75rem;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: "Inter", sans-serif;
+  letter-spacing: 0.02em;
+  background: linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
+  transition:
+    opacity 0.2s,
+    transform 0.15s,
+    box-shadow 0.2s;
+}
+
+.login-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 28px rgba(99, 102, 241, 0.5);
+}
+
+.login-btn:active {
+  transform: translateY(0);
+}
+
+/* "No account? Create one" link at the bottom */
+.login-footer {
+  text-align: center;
+  color: #475569;
+  font-size: 0.85rem;
+  margin-top: 1.5rem;
+}
+
+.login-footer a {
+  color: #06b6d4;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.login-footer a:hover {
+  text-decoration: underline;
+}

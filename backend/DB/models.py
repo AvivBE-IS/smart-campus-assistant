@@ -8,13 +8,14 @@ System Development:
 By defining models here, we establish a clear contract for data structure, enabling
 consistent interactions across the backend services.
 """
+from datetime import datetime, timezone
 import enum
 import pathlib
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy import (
     create_engine, Column, Integer, String, ForeignKey, 
-    DECIMAL, Date, Time, Enum, Table
+    DECIMAL, Date, Time, Enum, Table, DateTime
 )
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -166,6 +167,44 @@ class Enrollment(Base):
     student = relationship("Student", back_populates="enrollments")
     group = relationship("Group", back_populates="enrollments")
 
+class User(Base):
+    __tablename__ = 'users'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String, nullable=False, unique=True)
+    email = Column(String, nullable=False, unique=True) 
+    password = Column(String, nullable=False) 
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    messages = relationship("Message", back_populates="owner")
+    conversations = relationship("Conversation", back_populates="owner", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<User(id={self.id}, username='{self.username}')>"
+
+
+class Conversation(Base):
+    __tablename__ = 'conversations'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    title = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    owner = relationship("User", back_populates="conversations")
+    messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
+    
+class Message(Base):
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=True)
+    role = Column(String)
+    content = Column(String)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+    owner = relationship("User", back_populates="messages")
+    conversation = relationship("Conversation", back_populates="messages")
 
 if __name__ == "__main__":
     # Initialize the database if run as a script
