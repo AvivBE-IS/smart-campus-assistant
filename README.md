@@ -2,107 +2,188 @@
 markdown
 # Smart Campus Assistant
 
-An AI-powered web application built to instantly classify and answer student queries regarding campus information. Developed as a capstone evaluation project for **Elad Systems**.
+An AI-powered chatbot web application built to instantly answer student queries about campus information at BGU. Developed as a capstone evaluation project for **Elad Systems**.
+
+---
+
+## Live URLs (Docker)
+
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:3001 |
+| Backend API | http://localhost:8001 |
+| API Docs (Swagger) | http://localhost:8001/docs |
 
 ---
 
 ## Architecture Overview
 
-The system is built using a modern full-stack and highly available architecture:
-
-* **Frontend:** A lightweight, responsive web interface where students can submit natural language questions.
-* **Backend:** A RESTful API built with **Python & FastAPI** that handles incoming requests, manages routing, and retrieves context from a local **SQLite** database.
-* **AI Integration:** The backend communicates with the **Google Gemini API** to classify the user's intent into predefined categories (*Schedule, General Info, Technical Issue*) and generates JSON-formatted responses.
-* **Resilience (Fallback):** Implemented an automatic fallback mechanism routing queries from **Gemini 3 Flash** to **Gemini 2.5 Flash** during server overloads (HTTP 503/429) to ensure an 8-second SLA.
+| Layer | Technology |
+|---|---|
+| **Frontend** | React 19 + Vite 8, React Router v7, CSS Flexbox |
+| **Backend** | FastAPI (Python 3.11), Uvicorn, SQLAlchemy 2.x |
+| **Database** | SQLite (`backend/DB/smart_campus.db`) |
+| **AI** | Google Gemini API (`gemini-2.5-flash-lite` with `gemini-2.5-flash` fallback) |
+| **Auth** | JWT (PyJWT) + bcrypt 4.0.1 via passlib |
+| **Deployment** | Docker multi-stage builds + Docker Compose |
 
 ---
 
-## Infrastructure & DevOps (CI/CD)
+## Features
 
-* **Containerization:** The entire application is dockerized using a multi-stage Dockerfile and orchestrated via `docker-compose.yml` for isolated and secure deployment.
-* **Continuous Integration:** A **GitHub Actions** pipeline is configured to automatically run code linting (**Flake8**) and Unit Tests (**Pytest**) on every push to the main branch.
+- **Secure Auth** — Register + Login screens with JWT; protected routes; session persisted via localStorage
+- **Conversation Management** — Create, list, open, and delete chat conversations (sidebar)
+- **AI Chat** — Context-aware answers scoped to each conversation's message history
+- **Global State** — `AuthContext` (token/auth) + `ChatContext` (conversations/messages) via React Context API
+- **Service Layer** — All API calls isolated in `authService.js` and `chatService.js`; no `fetch()` in components
+- **Loading & Error States** — "Signing in…", "Loading messages…", "Thinking…" bubble; per-scope error banners
+- **Gemini Categories** — Schedule, General Info, Faculty & Lecturers, Grades & Averages, Registration & Fees, Technical Issue
+- **Responsive Layout** — Persistent 260px sidebar (left) + scrollable chat area (right); 768px/480px breakpoints
+
+---
+
+## Project Structure
+
+```
+smart-campus-assistant/
+├── docker-compose.yml
+├── .env                        # secrets (gitignored)
+├── backend/
+│   ├── Dockerfile
+│   ├── main.py                 # FastAPI app — all endpoints
+│   ├── auth_utils.py           # JWT helpers
+│   ├── requirements.txt
+│   └── DB/
+│       ├── models.py           # SQLAlchemy models
+│       └── seed.py             # DB seed script
+└── frontend/
+    ├── Dockerfile              # node:20 build → nginx:alpine
+    ├── nginx.conf              # SPA fallback routing
+    ├── .env                    # VITE_API_URL for local dev
+    ├── .env.production         # VITE_API_URL for Docker build
+    └── src/
+        ├── App.jsx             # Routes + ProtectedRoute
+        ├── main.jsx            # Providers: AuthProvider → ChatProvider
+        ├── context/
+        │   ├── AuthContext.jsx
+        │   └── ChatContext.jsx
+        ├── components/
+        │   ├── Layout/
+        │   │   └── Sidebar.jsx
+        │   └── Chat/
+        │       ├── MessageList.jsx
+        │       ├── MessageBubble.jsx
+        │       └── MessageInput.jsx
+        ├── pages/
+        │   ├── Home.jsx / Home.css
+        │   ├── Login.jsx / Login.css
+        │   └── Register.jsx / Register.css
+        └── services/
+            ├── authService.js  # POST /login, POST /register
+            └── chatService.js  # /conversations, /ask, mapMessage()
+```
+
+---
+
+## Backend API Endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/register` | No | Create new user account |
+| `POST` | `/login` | No | Returns JWT access token |
+| `POST` | `/ask` | JWT | Send message, get AI response |
+| `GET` | `/history` | JWT | All messages for current user |
+| `GET` | `/conversations` | JWT | List conversations |
+| `POST` | `/conversations` | JWT | Create new conversation |
+| `GET` | `/conversations/{id}` | JWT | Get conversation + messages |
+| `DELETE` | `/conversations/{id}` | JWT | Delete conversation |
 
 ---
 
 ## Environment Variables
 
-This project requires certain environment variables to run safely without hardcoding secrets. 
-Create a `.env` file in the root directory (this file is ignored by git) and add the following:
+Create a `.env` file in the **project root** (gitignored):
 
 ```env
 GEMINI_API_KEY=your_actual_api_key_here
-PORT=8000
-
+SECRET_KEY=your_jwt_secret_key_here
 ```
 
 ---
 
-## Installation & Running
+## Running with Docker (Recommended)
 
-The easiest and recommended way to run the system is via Docker.
+Ensure Docker Desktop is running.
 
-### Method 1: Running with Docker (Recommended)
-
-Ensure Docker Desktop is installed and running.
-
-1. **Clone the repository:**
 ```bash
-git clone [https://github.com/yourusername/smart-campus-assistant.git](https://github.com/yourusername/smart-campus-assistant.git)
+git clone https://github.com/AvivBE-IS/smart-campus-assistant.git
 cd smart-campus-assistant
 
-```
+# Add your .env file with GEMINI_API_KEY and SECRET_KEY
 
-
-2. **Build and run the containers:**
-```bash
 docker compose up --build
-
 ```
 
+- **Frontend:** http://localhost:3001
+- **Backend:** http://localhost:8001
+- **Swagger docs:** http://localhost:8001/docs
 
-3. **Access the application:**
-* **Frontend:** `http://localhost:8000` (or your defined port)
-* **API Docs (Swagger):** `http://localhost:8000/docs`
+---
 
+## Local Development (without Docker)
 
-
-### Method 2: Local Development (Manual Setup)
-
-If you prefer running without Docker:
-
-**Backend Setup:**
+**Backend:**
 
 ```bash
 cd backend
 python -m venv venv
-# Windows:
-venv\Scripts\activate
-# Mac/Linux:
-source venv/bin/activate
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # Mac/Linux
 
 pip install -r requirements.txt
-uvicorn main:app --reload
-
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**Frontend Setup:**
-Open the `index.html` file in your browser, or serve it using a simple local server.
+**Frontend:**
+
+```bash
+cd frontend
+npm install
+npm run dev                    # runs at http://localhost:5173
+```
+
+> Local dev uses `VITE_API_URL=http://localhost:8000` from `frontend/.env`.
+
+---
+
+## Database Seeding
+
+To reset and reseed the SQLite database with English sample data:
+
+```bash
+cd backend
+python DB/seed.py
+```
+
+Seed creates: 10 departments, 10 lecturers, 10 students, 10 courses, 10 groups, 12 enrollments.
 
 ---
 
 ## Testing
 
-The AI service includes automated unit tests to verify API categorization and the fallback logic mechanism using mocks.
-
-To run the tests locally:
-
 ```bash
 cd backend
 pytest -v
-
 ```
 
-> **Note:** A screenshot of the passing test execution and the GitHub Actions green pipeline is included in the `/docs` folder as required.
+---
 
+## Key Dependencies
 
+| Package | Version | Why pinned |
+|---|---|---|
+| `bcrypt` | `4.0.1` | v5.x breaks `passlib 1.7.4` |
+| `google-genai` | latest | Gemini 2.5 Flash support |
+| React | `19` | |
+| Vite | `8` | |
 
