@@ -4,7 +4,7 @@ import asyncio
 import pathlib
 import uvicorn
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 from typing import List, Optional
 from fastapi import FastAPI, Depends
@@ -397,6 +397,16 @@ LIGHT_BG = colors.HexColor("#f0f4f8")
 WHITE = colors.white
 DARK_TEXT = colors.HexColor("#222222")
 
+def _fmt_fee(value) -> str:
+    """Format a decimal fee value as a 2-decimal string."""
+    if value is None:
+        return "0.00"
+    try:
+        return f"{float(value):.2f}"
+    except (TypeError, ValueError):
+        return "0.00"
+
+
 def _build_pdf(db: Session) -> BytesIO:
     """Generate a professional campus report PDF and return it as a BytesIO buffer."""
     buffer = BytesIO()
@@ -485,7 +495,7 @@ def _build_pdf(db: Session) -> BytesIO:
     dept_map = {d.id: d.name for d in departments}
     course_map = {c.id: c.name for c in courses}
 
-    generated_at = datetime.utcnow().strftime("%B %d, %Y at %H:%M UTC")
+    generated_at = datetime.now(timezone.utc).strftime("%B %d, %Y at %H:%M UTC")
 
     story = []
 
@@ -531,7 +541,7 @@ def _build_pdf(db: Session) -> BytesIO:
             course_data.append([
                 c.name,
                 str(c.credits),
-                f"{float(c.extra_fee):.2f}" if c.extra_fee else "0.00",
+                f"{_fmt_fee(c.extra_fee)}" if c.extra_fee is not None else "0.00",
                 dept_map.get(c.department_id, "—"),
             ])
         course_table = Table(
@@ -617,7 +627,7 @@ async def download_campus_report(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF generation error: {str(e)}")
 
-    filename = f"campus_report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
+    filename = f"campus_report_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.pdf"
     return StreamingResponse(
         pdf_buffer,
         media_type="application/pdf",

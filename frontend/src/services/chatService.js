@@ -79,8 +79,8 @@ export async function downloadReport(token) {
   const a = document.createElement("a");
   a.href = url;
   const disposition = res.headers.get("Content-Disposition") || "";
-  const match = disposition.match(/filename="?([^"]+)"?/);
-  a.download = match ? match[1] : "campus_report.pdf";
+  const match = disposition.match(/filename[^;=\n]*=((['"])?(.*?)\2|([^;\n]*))/i);
+  a.download = match ? (match[3] || match[4] || "campus_report.pdf").trim() : "campus_report.pdf";
   document.body.appendChild(a);
   a.click();
   a.remove();
