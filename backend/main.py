@@ -4,10 +4,13 @@ import asyncio
 import pathlib
 import uvicorn
 import json
+from datetime import datetime
+from io import BytesIO
 from typing import List, Optional
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import HTTPException, status
+from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from google import genai
@@ -16,6 +19,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from auth_utils import hash_password, verify_password, create_access_token, get_current_user
 from DB.models import User, Message, Conversation
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import cm
+from reportlab.lib import colors
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+)
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
 # ---------------------------------------------------------
 # Path Handling & DB Imports
@@ -375,6 +386,243 @@ async def login(
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+# ---------------------------------------------------------
+# PDF Report Endpoint
+# ---------------------------------------------------------
+
+PRIMARY_COLOR = colors.HexColor("#003366")
+ACCENT_COLOR = colors.HexColor("#4a90e2")
+LIGHT_BG = colors.HexColor("#f0f4f8")
+WHITE = colors.white
+DARK_TEXT = colors.HexColor("#222222")
+
+def _build_pdf(db: Session) -> BytesIO:
+    """Generate a professional campus report PDF and return it as a BytesIO buffer."""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=2 * cm,
+        rightMargin=2 * cm,
+        topMargin=2.5 * cm,
+        bottomMargin=2.5 * cm,
+        title="Smart Campus Assistant — Campus Report",
+        author="BGU Smart Campus Assistant",
+    )
+
+    base_styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        "ReportTitle",
+        parent=base_styles["Title"],
+        fontSize=22,
+        textColor=PRIMARY_COLOR,
+        spaceAfter=4,
+        alignment=TA_CENTER,
+        fontName="Helvetica-Bold",
+    )
+    subtitle_style = ParagraphStyle(
+        "ReportSubtitle",
+        parent=base_styles["Normal"],
+        fontSize=11,
+        textColor=ACCENT_COLOR,
+        spaceAfter=2,
+        alignment=TA_CENTER,
+        fontName="Helvetica",
+    )
+    section_style = ParagraphStyle(
+        "SectionHeader",
+        parent=base_styles["Heading2"],
+        fontSize=13,
+        textColor=PRIMARY_COLOR,
+        spaceBefore=18,
+        spaceAfter=6,
+        fontName="Helvetica-Bold",
+    )
+    body_style = ParagraphStyle(
+        "BodyText",
+        parent=base_styles["Normal"],
+        fontSize=10,
+        textColor=DARK_TEXT,
+        spaceAfter=4,
+        fontName="Helvetica",
+    )
+    footer_style = ParagraphStyle(
+        "FooterText",
+        parent=base_styles["Normal"],
+        fontSize=8,
+        textColor=colors.grey,
+        alignment=TA_CENTER,
+        fontName="Helvetica",
+    )
+
+    table_header_style = TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), PRIMARY_COLOR),
+        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 10),
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_BG]),
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 1), (-1, -1), 9),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cccccc")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("ROWBACKGROUNDS", (0, 0), (-1, 0), [PRIMARY_COLOR]),
+    ])
+
+    # Fetch data
+    from DB.models import Course, Lecturer, Group, Department
+    departments = db.query(Department).all()
+    courses = db.query(Course).all()
+    lecturers = db.query(Lecturer).all()
+    groups = db.query(Group).all()
+
+    dept_map = {d.id: d.name for d in departments}
+    course_map = {c.id: c.name for c in courses}
+
+    generated_at = datetime.utcnow().strftime("%B %d, %Y at %H:%M UTC")
+
+    story = []
+
+    # ── Cover / Title block ──────────────────────────────────────
+    story.append(Spacer(1, 0.5 * cm))
+    story.append(Paragraph("🎓 Smart Campus Assistant", title_style))
+    story.append(Paragraph("Official Campus Data Report", subtitle_style))
+    story.append(Paragraph(f"Generated on {generated_at}", subtitle_style))
+    story.append(Spacer(1, 0.3 * cm))
+    story.append(HRFlowable(width="100%", thickness=2, color=PRIMARY_COLOR))
+    story.append(Spacer(1, 0.4 * cm))
+
+    # ── Summary Statistics ────────────────────────────────────────
+    story.append(Paragraph("Summary Statistics", section_style))
+    summary_data = [
+        ["Metric", "Count"],
+        ["Departments", str(len(departments))],
+        ["Courses", str(len(courses))],
+        ["Lecturers", str(len(lecturers))],
+        ["Course Groups / Sections", str(len(groups))],
+    ]
+    summary_table = Table(summary_data, colWidths=[9 * cm, 6 * cm])
+    summary_table.setStyle(table_header_style)
+    story.append(summary_table)
+
+    # ── Departments ───────────────────────────────────────────────
+    story.append(Paragraph("Departments", section_style))
+    if departments:
+        dept_data = [["#", "Department Name"]]
+        for i, d in enumerate(departments, 1):
+            dept_data.append([str(i), d.name])
+        dept_table = Table(dept_data, colWidths=[2 * cm, 13 * cm])
+        dept_table.setStyle(table_header_style)
+        story.append(dept_table)
+    else:
+        story.append(Paragraph("No department data available.", body_style))
+
+    # ── Courses ───────────────────────────────────────────────────
+    story.append(Paragraph("Courses", section_style))
+    if courses:
+        course_data = [["Course Name", "Credits", "Extra Fee (₪)", "Department"]]
+        for c in courses:
+            course_data.append([
+                c.name,
+                str(c.credits),
+                f"{float(c.extra_fee):.2f}" if c.extra_fee else "0.00",
+                dept_map.get(c.department_id, "—"),
+            ])
+        course_table = Table(
+            course_data,
+            colWidths=[5.5 * cm, 2.5 * cm, 3 * cm, 4 * cm],
+        )
+        course_table.setStyle(table_header_style)
+        story.append(course_table)
+    else:
+        story.append(Paragraph("No course data available.", body_style))
+
+    # ── Faculty & Lecturers ───────────────────────────────────────
+    story.append(Paragraph("Faculty & Lecturers", section_style))
+    if lecturers:
+        lect_data = [["Name", "Rank", "Office", "Office Hours", "Seniority"]]
+        for l in lecturers:
+            lect_data.append([
+                f"{l.first_name} {l.last_name}",
+                l.rank or "—",
+                l.office_location or "—",
+                l.office_hours or "—",
+                f"{l.seniority} yrs" if l.seniority else "—",
+            ])
+        lect_table = Table(
+            lect_data,
+            colWidths=[3.5 * cm, 2.5 * cm, 3 * cm, 3 * cm, 3 * cm],
+        )
+        lect_table.setStyle(table_header_style)
+        story.append(lect_table)
+    else:
+        story.append(Paragraph("No lecturer data available.", body_style))
+
+    # ── Schedule & Exam Dates ─────────────────────────────────────
+    story.append(Paragraph("Schedule & Exam Dates", section_style))
+    if groups:
+        sched_data = [["Course", "Group", "Type", "Day", "Time", "Exam A", "Exam B"]]
+        for g in groups:
+            start = g.start_time.strftime("%H:%M") if g.start_time else "—"
+            end = g.end_time.strftime("%H:%M") if g.end_time else "—"
+            sched_data.append([
+                course_map.get(g.course_id, "Unknown"),
+                str(g.group_number),
+                g.type.value if g.type else "—",
+                g.day_of_week.value if g.day_of_week else "—",
+                f"{start}–{end}",
+                g.exam_date_a.strftime("%d/%m/%Y") if g.exam_date_a else "TBD",
+                g.exam_date_b.strftime("%d/%m/%Y") if g.exam_date_b else "TBD",
+            ])
+        sched_table = Table(
+            sched_data,
+            colWidths=[3.5 * cm, 1.5 * cm, 2 * cm, 2.5 * cm, 2.5 * cm, 2 * cm, 2 * cm],
+        )
+        sched_table.setStyle(table_header_style)
+        story.append(sched_table)
+    else:
+        story.append(Paragraph("No schedule data available.", body_style))
+
+    # ── Footer ────────────────────────────────────────────────────
+    story.append(Spacer(1, 0.6 * cm))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#cccccc")))
+    story.append(Spacer(1, 0.2 * cm))
+    story.append(
+        Paragraph(
+            "This report was automatically generated by the BGU Smart Campus Assistant. "
+            "For questions or discrepancies, please contact the registrar's office.",
+            footer_style,
+        )
+    )
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+
+@app.get("/report/pdf")
+async def download_campus_report(
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user),
+):
+    """Generate and return a professional campus PDF report."""
+    try:
+        pdf_buffer = await asyncio.to_thread(_build_pdf, db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF generation error: {str(e)}")
+
+    filename = f"campus_report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

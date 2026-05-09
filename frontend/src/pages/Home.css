@@ -157,6 +157,7 @@
 .chat-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: 14px 20px;
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(10px);
@@ -168,6 +169,40 @@
   margin: 0;
   color: #003366;
   font-size: 1.2rem;
+}
+
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.report-error {
+  font-size: 0.8rem;
+  color: #c0392b;
+}
+
+.download-report-btn {
+  background: #003366;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: bold;
+  transition: background 0.2s, transform 0.1s;
+  white-space: nowrap;
+}
+
+.download-report-btn:hover:not(:disabled) {
+  background: #4a90e2;
+  transform: translateY(-1px);
+}
+
+.download-report-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* ---- Chat container ---- */

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
 import { ChatContext } from "../context/ChatContext";
-import { sendMessage } from "../services/chatService";
+import { sendMessage, downloadReport } from "../services/chatService";
 import Sidebar from "../components/Layout/Sidebar";
 import MessageList from "../components/Chat/MessageList";
 import MessageInput from "../components/Chat/MessageInput";
@@ -22,6 +22,8 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
   const messagesEndRef = useRef(null);
 
   // Scroll to bottom on new messages
@@ -69,6 +71,18 @@ export default function Home() {
     conversations.find((c) => c.id === activeConversationId)?.title ||
     "Smart Campus Assistant";
 
+  async function handleDownloadReport() {
+    setReportLoading(true);
+    setReportError("");
+    try {
+      await downloadReport(token);
+    } catch (err) {
+      setReportError(err.message || "Failed to generate report.");
+    } finally {
+      setReportLoading(false);
+    }
+  }
+
   return (
     <div className="chat-page">
       {/* ── Sidebar (Layout component) ── */}
@@ -78,6 +92,19 @@ export default function Home() {
       <div className="chat-main">
         <div className="chat-header">
           <h1>{activeTitle}</h1>
+          <div className="chat-header-actions">
+            {reportError && (
+              <span className="report-error">{reportError}</span>
+            )}
+            <button
+              className="download-report-btn"
+              onClick={handleDownloadReport}
+              disabled={reportLoading}
+              title="Download campus data as a professional PDF report"
+            >
+              {reportLoading ? "Generating…" : "⬇ Download Report"}
+            </button>
+          </div>
         </div>
 
         <div className="chat-container">
