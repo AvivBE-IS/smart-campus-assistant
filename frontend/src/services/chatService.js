@@ -79,7 +79,10 @@ export async function downloadReport(token) {
   const a = document.createElement("a");
   a.href = url;
   const disposition = res.headers.get("Content-Disposition") || "";
-  const match = disposition.match(/filename[^;=\n]*=((['"])?(.*?)\2|([^;\n]*))/i);
+  // Matches: filename="quoted.pdf", filename=unquoted.pdf, filename*=UTF-8''encoded.pdf
+  // Groups: [1]=full value, [2]=optional quote, [3]=quoted content, [4]=unquoted content
+  const CONTENT_DISPOSITION_RE = /filename[^;=\n]*=((['"])?(.*?)\2|([^;\n]*))/i;
+  const match = disposition.match(CONTENT_DISPOSITION_RE);
   a.download = match ? (match[3] || match[4] || "campus_report.pdf").trim() : "campus_report.pdf";
   document.body.appendChild(a);
   a.click();

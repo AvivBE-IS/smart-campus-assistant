@@ -495,7 +495,7 @@ def _build_pdf(db: Session) -> BytesIO:
     dept_map = {d.id: d.name for d in departments}
     course_map = {c.id: c.name for c in courses}
 
-    generated_at = datetime.now(timezone.utc).strftime("%B %d, %Y at %H:%M UTC")
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
     story = []
 
